@@ -66,3 +66,6 @@ df['Relevance Score Normalized'] = scaler.fit_transform(df[['Relevance Score']])
 # Display the results
 print(df[['Text', 'Relevance Score', 'Relevance Score Normalized']])
 df[['Text', 'Relevance Score', 'Relevance Score Normalized']].to_excel('word_dict_approach.xlsx')
+
+# TODO: add to relevancce score based on the hastags ... and @'s .... 
+# keep 90% weight on the tweet text ... and 10% on the hastags and @s 
