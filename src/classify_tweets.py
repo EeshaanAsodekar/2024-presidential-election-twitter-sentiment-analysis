@@ -116,4 +116,5 @@ if __name__ == "__main__":
     print(classified_tweets_df.head())
     print(tweets_labelled_df['Label'].value_counts())
     print(classified_tweets_df['Label'].value_counts())
-    classified_tweets_df.to_csv('data/raw/tweets_classified.csv')
+    subset_classified_tweets_df = classified_tweets_df[['Text','Label']]
+    subset_classified_tweets_df.to_excel('data/raw/tweets_classified.xlsx')

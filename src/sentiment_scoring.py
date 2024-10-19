@@ -2,7 +2,7 @@ import pandas as pd
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from data.reference_tweets import pro_trump_tweets, negative_trump_tweets,pro_harris_tweets,negative_harris_tweets, neutral_tweets
+from data.reference_tweets import pro_trump_tweets, negative_trump_tweets, pro_harris_tweets, negative_harris_tweets, neutral_tweets
 
 def create_labelled_dataset(pro_trump_tweets:list,
                             pro_harris_tweets:list,
@@ -25,6 +25,36 @@ def create_labelled_dataset(pro_trump_tweets:list,
 
     # Concatenate the DataFrames into a single DataFrame
     df = pd.concat([df_pro_trump, df_pro_harris, df_neutral], ignore_index=True)
+
+    # Shuffle the DataFrame (optional)
+    df = df.sample(frac=1).reset_index(drop=True)
+
+    # Display the first few rows
+    print(df.head())
+
+    return df
+
+def create_labelled_dataset_negative(negative_trump_tweets:list,
+                                     negative_harris_tweets:list,
+                                     neutral_tweets: list)->pd.DataFrame:
+    '''
+    Returns a labelled tweets dataset dataframe for negative sentiments
+    Columns of the dataset:
+        Tweet (the tweet text)
+        Label (neg_trump or neg_harris or neutral)
+    '''
+    # Create labeled DataFrames
+    df_neg_trump = pd.DataFrame(negative_trump_tweets, columns=["Tweet"])
+    df_neg_trump["Label"] = "neg_trump"
+
+    df_neg_harris = pd.DataFrame(negative_harris_tweets, columns=["Tweet"])
+    df_neg_harris["Label"] = "neg_harris"
+
+    df_neutral = pd.DataFrame(neutral_tweets, columns=["Tweet"])
+    df_neutral["Label"] = "neutral"
+
+    # Concatenate the DataFrames into a single DataFrame
+    df = pd.concat([df_neg_trump, df_neg_harris, df_neutral], ignore_index=True)
 
     # Shuffle the DataFrame (optional)
     df = df.sample(frac=1).reset_index(drop=True)
@@ -83,7 +113,6 @@ def preprocess_tweet(text):
     # 10. Join the words back into a single string
     return ' '.join(words)
 
-import pandas as pd
 import torch
 import torch.nn.functional as F
 from transformers import AutoTokenizer, AutoModelForSequenceClassification, Trainer, TrainingArguments
@@ -142,6 +171,53 @@ def train_model(labelled_df):
 
     return model
 
+def train_negative_model(labelled_df):
+    # Map labels to integers
+    label_mapping = {"neg_trump": 0, "neg_harris": 1, "neutral": 2}
+    labelled_df["label"] = labelled_df["Label"].map(label_mapping)
+
+    # Initialize the tokenizer and dataset
+    tokenizer = AutoTokenizer.from_pretrained("cardiffnlp/twitter-roberta-base-sentiment")
+    dataset = Dataset.from_pandas(labelled_df[["Tweet", "label"]])
+    encoded_dataset = dataset.map(lambda x: tokenize_data(x, tokenizer), batched=True)
+    train_test_split = encoded_dataset.train_test_split(test_size=0.2)
+
+    # Initialize the RoBERTa model for sequence classification
+    model = AutoModelForSequenceClassification.from_pretrained(
+        "cardiffnlp/twitter-roberta-base-sentiment", num_labels=3
+    )
+
+    # Set up training arguments
+    training_args = TrainingArguments(
+        output_dir="./negative_results",
+        evaluation_strategy="epoch",
+        learning_rate=2e-5,
+        per_device_train_batch_size=8,
+        per_device_eval_batch_size=8,
+        num_train_epochs=3,
+        weight_decay=0.01,
+        logging_dir="./negative_logs",
+        logging_steps=10,
+        save_total_limit=1,
+    )
+
+    # Initialize Trainer
+    trainer = Trainer(
+        model=model,
+        args=training_args,
+        train_dataset=train_test_split["train"],
+        eval_dataset=train_test_split["test"],
+    )
+
+    # Train the model
+    trainer.train()
+
+    # Save the model and tokenizer
+    model.save_pretrained("./negative_results")
+    tokenizer.save_pretrained("./negative_results")
+
+    return model
+
 # **Step 5: Generate Sentiment Scores**
 def generate_sentiment_scores(model, df):
     tokenizer = AutoTokenizer.from_pretrained("./results")
@@ -159,14 +235,37 @@ def generate_sentiment_scores(model, df):
     # Assign scores to DataFrame
     df["pro_trump_score"] = probs[:, 0].numpy()
     df["pro_harris_score"] = probs[:, 1].numpy()
-    df["neutral_score"] = probs[:, 2].numpy()
+    df["neutral_score_pos"] = probs[:, 2].numpy()
+
+    return df
+
+def generate_negative_sentiment_scores(model, df):
+    tokenizer = AutoTokenizer.from_pretrained("./negative_results")
+
+    # Tokenize tweets
+    encodings = tokenizer(list(df["cleaned_text"]), padding=True, truncation=True, return_tensors="pt")
+
+    # Predict with the model
+    with torch.no_grad():
+        outputs = model(**encodings)
+
+    # Get probabilities from logits
+    probs = F.softmax(outputs.logits, dim=-1)
+
+    # Assign scores to DataFrame
+    df["neg_trump_score"] = probs[:, 0].numpy()
+    df["neg_harris_score"] = probs[:, 1].numpy()
+    df["neutral_score_neg"] = probs[:, 2].numpy()
 
     return df
 
 # **Step 6: Main Function**
 if __name__ == "__main__":
-    # Create the labelled dataset
+    # Create the positive labelled dataset
     labelled_df = create_labelled_dataset(pro_trump_tweets, pro_harris_tweets, neutral_tweets)
+
+    # Create the negative labelled dataset
+    negative_labelled_df = create_labelled_dataset_negative(negative_trump_tweets, negative_harris_tweets, neutral_tweets)
 
     # Load and clean your main dataset
     tweets_df = pd.read_csv("data/raw/subset.csv")
@@ -175,12 +274,19 @@ if __name__ == "__main__":
 
     print(tweets_df.head())
     print(labelled_df.head())
+    print(negative_labelled_df.head())
 
-    # Train the RoBERTa model
+    # Train the positive sentiment RoBERTa model
     model = train_model(labelled_df)
 
-    # Generate sentiment scores for the main dataset
+    # Generate positive sentiment scores for the main dataset
     tweets_df_with_scores = generate_sentiment_scores(model, tweets_df)
+
+    # Train the negative sentiment RoBERTa model
+    negative_model = train_negative_model(negative_labelled_df)
+
+    # Generate negative sentiment scores for the main dataset
+    tweets_df_with_scores = generate_negative_sentiment_scores(negative_model, tweets_df_with_scores)
 
     # Save the results to an Excel file
     tweets_df_with_scores.to_excel("tweets_with_sentiment_scores.xlsx", index=False)
