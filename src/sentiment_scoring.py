@@ -229,59 +229,92 @@ def train_negative_model(labelled_df):
     return model
 
 
-# **Step 5: Generate Sentiment Scores**
-def generate_sentiment_scores(model, df):
+def generate_sentiment_scores(model, df, batch_size=32):
     tokenizer = AutoTokenizer.from_pretrained("./results")
 
-    # Tokenize tweets with max_length=512
-    encodings = tokenizer(
-        list(df["cleaned_text"]),
-        padding=True,
-        truncation=True,
-        max_length=512,  # Updated from 128 to 512
-        return_tensors="pt"
-    )
+    pro_trump_scores = []
+    pro_harris_scores = []
+    neutral_scores = []
 
-    # Predict with the model
-    with torch.no_grad():
-        outputs = model(**encodings)
+    # Process data in batches
+    for i in range(0, len(df), batch_size):
+        batch_texts = df["cleaned_text"][i:i+batch_size].tolist()
+        encodings = tokenizer(
+            batch_texts,
+            padding=True,
+            truncation=True,
+            max_length=512,
+            return_tensors="pt"
+        )
 
-    # Get probabilities from logits
-    probs = F.softmax(outputs.logits, dim=-1)
+        # Move tensors to GPU if available
+        if torch.cuda.is_available():
+            encodings = {key: val.cuda() for key, val in encodings.items()}
+            model = model.cuda()
+
+        # Predict with the model
+        with torch.no_grad():
+            outputs = model(**encodings)
+
+        # Get probabilities from logits
+        probs = F.softmax(outputs.logits, dim=-1).cpu().numpy()
+
+        # Append batch results to the lists
+        pro_trump_scores.extend(probs[:, 0])
+        pro_harris_scores.extend(probs[:, 1])
+        neutral_scores.extend(probs[:, 2])
 
     # Assign scores to DataFrame
-    df["pro_trump_score"] = probs[:, 0].numpy()
-    df["pro_harris_score"] = probs[:, 1].numpy()
-    df["neutral_score_pos"] = probs[:, 2].numpy()
+    df["pro_trump_score"] = pro_trump_scores
+    df["pro_harris_score"] = pro_harris_scores
+    df["neutral_score_pos"] = neutral_scores
 
     return df
 
 
-def generate_negative_sentiment_scores(model, df):
+
+def generate_negative_sentiment_scores(model, df, batch_size=32):
     tokenizer = AutoTokenizer.from_pretrained("./negative_results")
 
-    # Tokenize tweets with max_length=512
-    encodings = tokenizer(
-        list(df["cleaned_text"]),
-        padding=True,
-        truncation=True,
-        max_length=512,  # Updated from 128 to 512
-        return_tensors="pt"
-    )
+    neg_trump_scores = []
+    neg_harris_scores = []
+    neutral_scores = []
 
-    # Predict with the model
-    with torch.no_grad():
-        outputs = model(**encodings)
+    # Process data in batches
+    for i in range(0, len(df), batch_size):
+        batch_texts = df["cleaned_text"][i:i+batch_size].tolist()
+        encodings = tokenizer(
+            batch_texts,
+            padding=True,
+            truncation=True,
+            max_length=512,
+            return_tensors="pt"
+        )
 
-    # Get probabilities from logits
-    probs = F.softmax(outputs.logits, dim=-1)
+        # Move tensors to GPU if available
+        if torch.cuda.is_available():
+            encodings = {key: val.cuda() for key, val in encodings.items()}
+            model = model.cuda()
+
+        # Predict with the model
+        with torch.no_grad():
+            outputs = model(**encodings)
+
+        # Get probabilities from logits
+        probs = F.softmax(outputs.logits, dim=-1).cpu().numpy()
+
+        # Append batch results to the lists
+        neg_trump_scores.extend(probs[:, 0])
+        neg_harris_scores.extend(probs[:, 1])
+        neutral_scores.extend(probs[:, 2])
 
     # Assign scores to DataFrame
-    df["neg_trump_score"] = probs[:, 0].numpy()
-    df["neg_harris_score"] = probs[:, 1].numpy()
-    df["neutral_score_neg"] = probs[:, 2].numpy()
+    df["neg_trump_score"] = neg_trump_scores
+    df["neg_harris_score"] = neg_harris_scores
+    df["neutral_score_neg"] = neutral_scores
 
     return df
+
 
 
 def combined_scoring():
