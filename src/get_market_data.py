@@ -13,7 +13,7 @@ tickers = [
 ]
 
 # Define the date range
-end_date = '2024-10-16'
+end_date = '2024-10-17'
 start_date = '2024-10-01'
 
 # Initialize an empty DataFrame to store the adjusted closing prices
