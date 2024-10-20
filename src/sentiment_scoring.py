@@ -119,9 +119,15 @@ from transformers import AutoTokenizer, AutoModelForSequenceClassification, Trai
 from datasets import Dataset
 
 # **Step 3: Tokenize the Data**
+# **Step 3: Tokenize the Data**
 def tokenize_data(examples, tokenizer):
     """Tokenize tweets with the RoBERTa tokenizer."""
-    return tokenizer(examples["Tweet"], padding="max_length", truncation=True, max_length=128)
+    return tokenizer(
+        examples["Tweet"],
+        padding="max_length",
+        truncation=True,
+        max_length=512  # Updated from 128 to 512
+    )
 
 # **Step 4: Train the RoBERTa Model**
 def train_model(labelled_df):
@@ -132,6 +138,8 @@ def train_model(labelled_df):
     # Initialize the tokenizer and dataset
     tokenizer = AutoTokenizer.from_pretrained("cardiffnlp/twitter-roberta-base-sentiment")
     dataset = Dataset.from_pandas(labelled_df[["Tweet", "label"]])
+
+    # Use the updated tokenize_data function with max_length=512
     encoded_dataset = dataset.map(lambda x: tokenize_data(x, tokenizer), batched=True)
     train_test_split = encoded_dataset.train_test_split(test_size=0.2)
 
@@ -140,7 +148,7 @@ def train_model(labelled_df):
         "cardiffnlp/twitter-roberta-base-sentiment", num_labels=3
     )
 
-    # Set up training arguments
+    # Set up training arguments (same as before)
     training_args = TrainingArguments(
         output_dir="./results",
         evaluation_strategy="epoch",
@@ -154,7 +162,7 @@ def train_model(labelled_df):
         save_total_limit=1,
     )
 
-    # Initialize Trainer
+    # Initialize Trainer (same as before)
     trainer = Trainer(
         model=model,
         args=training_args,
@@ -179,6 +187,8 @@ def train_negative_model(labelled_df):
     # Initialize the tokenizer and dataset
     tokenizer = AutoTokenizer.from_pretrained("cardiffnlp/twitter-roberta-base-sentiment")
     dataset = Dataset.from_pandas(labelled_df[["Tweet", "label"]])
+
+    # Use the updated tokenize_data function with max_length=512
     encoded_dataset = dataset.map(lambda x: tokenize_data(x, tokenizer), batched=True)
     train_test_split = encoded_dataset.train_test_split(test_size=0.2)
 
@@ -187,7 +197,7 @@ def train_negative_model(labelled_df):
         "cardiffnlp/twitter-roberta-base-sentiment", num_labels=3
     )
 
-    # Set up training arguments
+    # Set up training arguments (same as before)
     training_args = TrainingArguments(
         output_dir="./negative_results",
         evaluation_strategy="epoch",
@@ -201,7 +211,7 @@ def train_negative_model(labelled_df):
         save_total_limit=1,
     )
 
-    # Initialize Trainer
+    # Initialize Trainer (same as before)
     trainer = Trainer(
         model=model,
         args=training_args,
@@ -218,12 +228,19 @@ def train_negative_model(labelled_df):
 
     return model
 
+
 # **Step 5: Generate Sentiment Scores**
 def generate_sentiment_scores(model, df):
     tokenizer = AutoTokenizer.from_pretrained("./results")
 
-    # Tokenize tweets
-    encodings = tokenizer(list(df["cleaned_text"]), padding=True, truncation=True, return_tensors="pt")
+    # Tokenize tweets with max_length=512
+    encodings = tokenizer(
+        list(df["cleaned_text"]),
+        padding=True,
+        truncation=True,
+        max_length=512,  # Updated from 128 to 512
+        return_tensors="pt"
+    )
 
     # Predict with the model
     with torch.no_grad():
@@ -239,11 +256,18 @@ def generate_sentiment_scores(model, df):
 
     return df
 
+
 def generate_negative_sentiment_scores(model, df):
     tokenizer = AutoTokenizer.from_pretrained("./negative_results")
 
-    # Tokenize tweets
-    encodings = tokenizer(list(df["cleaned_text"]), padding=True, truncation=True, return_tensors="pt")
+    # Tokenize tweets with max_length=512
+    encodings = tokenizer(
+        list(df["cleaned_text"]),
+        padding=True,
+        truncation=True,
+        max_length=512,  # Updated from 128 to 512
+        return_tensors="pt"
+    )
 
     # Predict with the model
     with torch.no_grad():
@@ -259,6 +283,7 @@ def generate_negative_sentiment_scores(model, df):
 
     return df
 
+
 def combined_scoring():
     # Create the positive labelled dataset
     labelled_df = create_labelled_dataset(pro_trump_tweets, pro_harris_tweets, neutral_tweets)
@@ -267,7 +292,7 @@ def combined_scoring():
     negative_labelled_df = create_labelled_dataset_negative(negative_trump_tweets, negative_harris_tweets, neutral_tweets)
 
     # Load and clean your main dataset
-    tweets_df = pd.read_csv("data/raw/subset.csv")
+    tweets_df = pd.read_csv(r'data\raw\tweets_Presidential_Election_data_Oct15_2024.csv')
     tweets_df["Text"] = tweets_df["Text"].astype(str)
     tweets_df["cleaned_text"] = tweets_df["Text"].apply(preprocess_tweet)
 
@@ -324,5 +349,5 @@ def individual_scoring():
 
 
 if __name__ == "__main__":
-    # combined_scoring()
-    individual_scoring()
+    combined_scoring()
+    # individual_scoring()
