@@ -259,8 +259,7 @@ def generate_negative_sentiment_scores(model, df):
 
     return df
 
-# **Step 6: Main Function**
-if __name__ == "__main__":
+def combined_scoring():
     # Create the positive labelled dataset
     labelled_df = create_labelled_dataset(pro_trump_tweets, pro_harris_tweets, neutral_tweets)
 
@@ -290,3 +289,40 @@ if __name__ == "__main__":
 
     # Save the results to an Excel file
     tweets_df_with_scores.to_excel("tweets_with_sentiment_scores.xlsx", index=False)
+
+from nltk.sentiment.vader import SentimentIntensityAnalyzer
+nltk.download('vader_lexicon')  # Download VADER lexicon if not already downloaded
+
+def individual_scoring():
+    tweets_df = pd.read_excel('data/raw/tweets_classified.xlsx')
+    # print(tweets_df.value_counts())
+    # print(tweets_df.columns)
+    print(tweets_df['Label'].value_counts())
+
+    # Assuming 'Label' column contains labels 'trump', 'kamala', 'neutral'
+    # Split the DataFrame into Trump and Kamala DataFrames
+    trump_df = tweets_df[tweets_df['Label'] == 'trump'].copy()
+    kamala_df = tweets_df[tweets_df['Label'] == 'harris'].copy()
+
+    # Initialize VADER sentiment analyzer
+    sid = SentimentIntensityAnalyzer()
+
+    # Function to get sentiment score
+    def get_sentiment_score(text):
+        return sid.polarity_scores(text)['compound']
+
+    # Apply sentiment analysis to the tweets
+    trump_df['sentiment'] = trump_df['Text'].apply(get_sentiment_score)
+    kamala_df['sentiment'] = kamala_df['Text'].apply(get_sentiment_score)
+
+    # Return or save the dataframes as needed
+    # For example, print the first few rows
+    print(trump_df.head())
+    trump_df.to_csv("vader_trump_score.csv")
+    print(kamala_df.head())
+    kamala_df.to_csv("vader_harris_score.csv")
+
+
+if __name__ == "__main__":
+    # combined_scoring()
+    individual_scoring()
