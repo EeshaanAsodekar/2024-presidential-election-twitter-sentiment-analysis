@@ -119,7 +119,6 @@ from transformers import AutoTokenizer, AutoModelForSequenceClassification, Trai
 from datasets import Dataset
 
 # **Step 3: Tokenize the Data**
-# **Step 3: Tokenize the Data**
 def tokenize_data(examples, tokenizer):
     """Tokenize tweets with the RoBERTa tokenizer."""
     return tokenizer(
@@ -325,7 +324,8 @@ def combined_scoring():
     negative_labelled_df = create_labelled_dataset_negative(negative_trump_tweets, negative_harris_tweets, neutral_tweets)
 
     # Load and clean your main dataset
-    tweets_df = pd.read_csv(r'data\raw\tweets_Presidential_Election_data_Oct15_2024.csv')
+    # tweets_df = pd.read_csv(r'data\raw\tweets_Presidential_Election_data_Oct15_2024.csv')
+    tweets_df = pd.read_excel(r'data\raw\tweets_combined.xlsx')
     tweets_df["Text"] = tweets_df["Text"].astype(str)
     tweets_df["cleaned_text"] = tweets_df["Text"].apply(preprocess_tweet)
 
